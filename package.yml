@@ -3,7 +3,7 @@ version: 2.18.0-5
 name: Part-DB
 description: 开源电子元器件库存管理系统，管理元器件、BOM、采购与价格历史
 author: Part-DB Community
-license: AGPL-3.0-or-later
+license: AGPL-3.0
 homepage: https://github.com/Part-DB/Part-DB-server
 min_os_version: 1.6.0
 support_mobile: false
@@ -46,8 +46,7 @@ locales:
 
       【数据导入导出】
 
-      已接入云盘文件选择器：导出 CSV/ZIP
-      备份、导入器件清单、上传器件图片或数据手册时，会直接打开云盘文件选择界面，文件来自你自己的网盘，无需中转。
+      已接入云盘文件选择器：导出 CSV/ZIP 备份、导入器件清单、上传器件图片或数据手册时，会直接打开云盘文件选择界面，文件来自你自己的网盘，无需中转。
 
 
       【数据持久化】
@@ -71,12 +70,11 @@ locales:
       - CSV/JSON 导入导出、ZIP 全量备份、REST API、KiCad 集成
 
       - 中文界面（默认语言已设为简体中文）
+
   en-US:
     name: Part-DB
     description: >-
-      Open-source electronic component inventory management: parts, footprints
-      and parameters, stock levels with minimum-stock warnings, suppliers and
-      price history, project BOMs, barcode labels and a REST API
+      Open-source electronic component inventory management: parts, footprints and parameters, stock levels with minimum-stock warnings, suppliers and price history, project BOMs, barcode labels and a REST API
     usage: >
       Part-DB is an open-source inventory management system for electronic
 
@@ -110,13 +108,14 @@ locales:
       Getting started
 
       1. Create categories (resistor, capacitor, MCU...), footprints, suppliers
+
          and manufacturers.
       2. Add parts with parameters, footprint, stock level, minimum stock and
+
          storage location.
       3. The dashboard shows total value and low-stock warnings automatically.
 
-      4. Store supplier part numbers and prices per part to keep a price
-      history.
+      4. Store supplier part numbers and prices per part to keep a price history.
 
       5. Attach parts to projects (BOM) to see missing parts and total cost.
 
@@ -125,8 +124,7 @@ locales:
 
       Import and export
 
-      Cloud drive integration is enabled: CSV/ZIP export or import, datasheet
-      and
+      Cloud drive integration is enabled: CSV/ZIP export or import, datasheet and
 
       image upload use the drive file picker directly.
 
@@ -136,6 +134,7 @@ locales:
       The SQLite database and attachments live in the app's private directory
 
       (/lzcapp/var/partdb/) and survive restarts and updates.
+
 format: v2
 is_app: true
 images:
