@@ -1,5 +1,5 @@
 package: cloud.lazycat.app.partdb1
-version: 2.18.0-5
+version: 2.20.1
 name: Part-DB
 description: 开源电子元器件库存管理系统，管理元器件、BOM、采购与价格历史
 author: Part-DB Community
@@ -109,8 +109,10 @@ locales:
 
       1. Create categories (resistor, capacitor, MCU...), footprints, suppliers
 
+
          and manufacturers.
       2. Add parts with parameters, footprint, stock level, minimum stock and
+
 
          storage location.
       3. The dashboard shows total value and low-stock warnings automatically.

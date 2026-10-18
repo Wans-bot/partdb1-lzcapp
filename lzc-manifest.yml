@@ -128,7 +128,8 @@ application:
             password: PartDB123456
 services:
   partdb:
-    image: registry.lazycat.cloud/wans/jbtronics/part-db1:42c2e3eed4b7d13d
+    # upstream: docker.io/jbtronics/part-db1:v2.20.1
+    image: registry.lazycat.cloud/wans/jbtronics/part-db1:e48eda6426478f05
     # 用入口脚本替代 setup_script：manifest 里 setup_script 与 entrypoint/command 互斥
     # （同时写会报 400 cannot define both init and entrypoint/command）。
     # 脚本负责建目录、修属主，并在后台清掉首次建库给 admin 打的「必须改密」标记 ——
