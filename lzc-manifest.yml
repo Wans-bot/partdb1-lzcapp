@@ -1,0 +1,175 @@
+application:
+  subdomain: partdb
+  routes:
+    - /=http://partdb.cloud.lazycat.app.partdb1.lzcapp:80
+  health_check:
+    test_url: http://partdb.cloud.lazycat.app.partdb1.lzcapp:80/zh/login
+    start_period: 600s
+  injects:
+    - id: lazycat-file-bridge
+      'on': request
+      auth_required: false
+      when:
+        - /__lazycat_file_bridge/*
+      do:
+        - src: |
+            const bridgePrefix = "/__lazycat_file_bridge";
+            const requestHost = String(ctx.request.host || "")
+              .split(":")[0]
+              .toLowerCase();
+            const firstDot = requestHost.indexOf(".");
+            const method = String(ctx.request.method || "").toUpperCase();
+
+            if (
+              firstDot <= 0 ||
+              !requestHost.endsWith(".heiyu.space") ||
+              !["GET", "HEAD", "PUT"].includes(method)
+            ) {
+              ctx.response.send(
+                ["GET", "HEAD", "PUT"].includes(method) ? 400 : 405,
+                "Invalid LazyCat file bridge request",
+              );
+              return;
+            }
+
+            const boxDomain = requestHost.slice(firstDot + 1);
+            const fileOrigin = "https://file." + boxDomain;
+            const targetPath =
+              "/files/home" + ctx.request.path.slice(bridgePrefix.length);
+
+            ctx.headers.del("Origin");
+            ctx.headers.del("Referer");
+            ctx.proxy.to(fileOrigin, {
+              path: targetPath,
+              query: ctx.request.raw_query,
+              use_target_host: true,
+              timeout_ms: 120000,
+              on_fail: "error",
+            });
+    - id: open-save-chooser
+      'on': browser
+      auth_required: false
+      when:
+        - /*
+      do:
+        - src: >-
+            file:///lzcapp/pkg/content/lazycat-injects/lzc-file-chooser-inject.js
+          params:
+            diskRoot: /_lzc/files/home
+            fileBridgeRoot: /__lazycat_file_bridge
+            fallbackMime: application/octet-stream
+            locale: auto
+            hooks:
+              fileSystemAccess: true
+              fileInput: true
+              downloadAnchor: true
+    - id: lzc-partdb-csp-report
+      'on': request
+      auth_required: false
+      # Part-DB 把 CSP 上报发到 <站点根>/csp/report；这条路径经 lzcinit 时不会被应用路由命中，
+      # 浏览器控制台每个页面都会留一条 404/502。这里直接吞掉上报请求返回 204。
+      when:
+        - /csp/report
+      do:
+        - src: |
+            ctx.response.send(200, "", { content_type: "text/plain; charset=utf-8" });
+    - id: lzc-partdb-no-update-manager
+      # 上架指南第 5 条：应用内不得出现更新提示。本应用由微服商店统一分发与更新，
+      # 上游「更新管理器」页在这里只能显示「Web 更新已禁用 / 备份恢复已禁用 /
+      # 无法获取发布信息」这类既无意义、又像报错的提示，因此把该路由导回首页。
+      'on': request
+      auth_required: false
+      when:
+        - /*
+      do:
+        - src: |
+            const path = String(ctx.request.path || "");
+            const m = path.match(
+              /^\/([A-Za-z]{2}(?:[-_][A-Za-z]{2,4})?)?\/?system\/update-manager(?:\/.*)?$/,
+            );
+            if (!m) return;
+            const locale = m[1] ? "/" + m[1] : "";
+            ctx.response.send(302, "", { location: locale + "/" });
+    - id: lzc-partdb-hide-update-nav
+      # 同一条要求的界面侧配合：把指向「更新管理器」的导航项收起来（该页已被上面的
+      # 请求注入重定向，留着入口会变成点了就回首页的怪链接）。
+      'on': browser
+      auth_required: false
+      when:
+        - /*
+      do:
+        - src: |
+            (function () {
+              function hideUpdateEntries() {
+                var nodes = document.querySelectorAll('a[href*="system/update-manager"]');
+                for (var i = 0; i < nodes.length; i++) {
+                  var item = nodes[i].closest("li") || nodes[i];
+                  item.style.display = "none";
+                }
+              }
+              hideUpdateEntries();
+              document.addEventListener("DOMContentLoaded", hideUpdateEntries);
+              window.setTimeout(hideUpdateEntries, 1000);
+              window.setTimeout(hideUpdateEntries, 3000);
+            })();
+    - id: lzc-partdb-autologin
+      'on': browser
+      auth_required: false
+      when:
+        - /*
+      do:
+        - src: file:///lzcapp/pkg/content/lazycat-injects/lzc-partdb-autologin.js
+          # 凭据是固定值，与下面 PARTDB_ADMIN_USER/PARTDB_ADMIN_PW 及入口脚本
+          # content/fix-admin.php 的兜底完全一致。
+          # 不要再用 {{ index .U "..." }}：部署参数文件没打进 LPK 时会渲染成字面量
+          # "<no value>"，注入就会拿 "<no value>" 当账号去登录 → Invalid credentials（无法登陆）。
+          params:
+            user: admin
+            password: PartDB123456
+services:
+  partdb:
+    image: registry.lazycat.cloud/wans/jbtronics/part-db1:42c2e3eed4b7d13d
+    # 用入口脚本替代 setup_script：manifest 里 setup_script 与 entrypoint/command 互斥
+    # （同时写会报 400 cannot define both init and entrypoint/command）。
+    # 脚本负责建目录、修属主，并在后台清掉首次建库给 admin 打的「必须改密」标记 ——
+    # 该标记会把用户强制重定向到「用户设置」页，除白名单路由外什么都打不开。
+    entrypoint: /bin/bash
+    command: /lzcapp/pkg/content/entrypoint-partdb.sh
+    environment:
+      - TZ=Asia/Shanghai
+      - DB_AUTOMIGRATE=true
+      # 管理员凭据：固定值，三处必须一致 —— 这里、入口脚本 fix-admin.php 的兜底、
+      # 以及自动登录注入的 params。改密码请三处同时改，或让用户在应用内自行修改。
+      - INITIAL_ADMIN_PW=PartDB123456
+      - PARTDB_ADMIN_USER=admin
+      - PARTDB_ADMIN_PW=PartDB123456
+      - APP_SECRET=6f1c9a5d47b8e2039c4a7d1e5b8f3a26
+      - DEFAULT_LANG=zh
+      - DEFAULT_TIMEZONE=Asia/Shanghai
+      - BASE_CURRENCY=CNY
+      # 上架指南第 5 条：应用内的更新提示不得干扰正常使用。Part-DB 会在首页弹
+      # 「新版本可用 → 更新管理器」横幅（本包的版本由商店统一分发），这里关掉自动检查，
+      # 让首页保持干净、也不去访问外网更新接口。
+      - CHECK_FOR_UPDATES=false
+      # 供邮件 / SAML / CSP 上报地址生成链接用；平台会展开 $VAR（不是 ${VAR}）。
+      # 注意结尾不能带斜杠：Part-DB 用它拼 report-uri（%env(DEFAULT_URI)%/csp/report），
+      # 多一个斜杠就会拼出 https://域名//csp/report 这种带双斜杠的地址，浏览器上报全部失败。
+      - DEFAULT_URI=https://$LAZYCAT_APP_DOMAIN
+      # 平台在入口终结 TLS，转发给容器是 http + X-Forwarded-Proto: https。
+      # 不声明信任代理时 Symfony 认为当前请求是 http：登录成功后的「回 Referer」
+      # 分支会把 https 的 Referer 当成外部地址 → 302 回登录页 → 自动登录陷入死循环。
+      - >-
+        TRUSTED_PROXIES=REMOTE_ADDR,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - >-
+        TRUSTED_HOSTS=^(partdb\..*|partdb\.cloud\.lazycat\.app\.part-db\.lzcapp|localhost|127\.0\.0\.1|10\..*|172\.(1[6-9]|2[0-9]|3[01])\..*|192\.168\..*)$
+    binds:
+      - /lzcapp/var/partdb/var:/var/www/html/var
+      - /lzcapp/var/partdb/uploads:/var/www/html/uploads
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS -o /dev/null http://127.0.0.1/zh/login || exit 1
+      interval: 20s
+      timeout: 10s
+      retries: 30
+      start_period: 300s
